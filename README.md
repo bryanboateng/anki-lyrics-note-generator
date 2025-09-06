@@ -2,18 +2,16 @@
 
 Turn a folder of plain-text lyrics into Anki <q>what’s the next line?</q> flashcards.
 
-<div align="center" style="
-    border:1px solid GrayText;
-    padding:12px;
-    margin:12px 0;
-    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-">
-    <div><small>Hey Jude</small></div>
-    <div>Hey Jude, don't make it bad<br/> Take a sad song and make it better</div>
-    <hr>
-    <div>Remember to let her into your heart</div>
-</div>
+## Sample card
 
+```txt
+Front:
+Hey Jude, don't make it bad
+Take a sad song and make it better
+
+Back:
+Remember to let her into your heart
+```
 
 ## Quick start
 
