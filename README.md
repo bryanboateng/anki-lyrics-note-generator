@@ -34,7 +34,7 @@ swift build -c release
 ## What you get
 
 * `_notes.csv` in the same folder
-* Two fields (no header): Front**, Back
+* Two fields (no header): Front, Back
 * Front shows the previous 2 lines; Back is the next line
 
 ### Example
