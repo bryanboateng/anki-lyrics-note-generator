@@ -6,6 +6,7 @@ let package = Package(
 	name: "anki-lyrics-note-generator",
 	targets: [
 		.executableTarget(
-			name: "AnkiLyricsNoteGenerator"),
+			name: "AnkiLyricsNoteGenerator"
+		),
 	]
 )
