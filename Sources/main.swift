@@ -28,14 +28,14 @@ struct Song {
 }
 
 private func textFileURLs(at directoryURL: URL) throws -> [URL] {
-	let urls = try FileManager.default.contentsOfDirectory(
+	return try FileManager.default.contentsOfDirectory(
 		at: directoryURL,
-		includingPropertiesForKeys: [.contentTypeKey],
+		includingPropertiesForKeys: [.isDirectoryKey],
 		options: [.skipsHiddenFiles, .skipsPackageDescendants]
 	)
-	return urls.filter { url in
-		(try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == false &&
-		(try? url.resourceValues(forKeys: [.contentTypeKey]).contentType?.conforms(to: .text)) == true
+	.filter { url in
+		let urlIsOfDirectory = try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false
+		return !urlIsOfDirectory && url.pathExtension.lowercased() == "txt"
 	}
 }
 
