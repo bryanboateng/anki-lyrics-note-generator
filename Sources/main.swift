@@ -23,7 +23,7 @@ struct Note: Hashable {
 
 struct Song {
 	let title: String
-	let lyrics: [NonEmpty<String>]
+	let lyrics: NonEmpty<[NonEmpty<String>]>
 }
 
 private func textFileURLs(at directoryURL: URL) throws -> [URL] {
@@ -110,7 +110,7 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 	)
 }
 
-func notes(for lyrics: [NonEmpty<String>]) -> [Note] {
+func notes(for lyrics: NonEmpty<[NonEmpty<String>]>) -> [Note] {
 	let contextSize = min(2, lyrics.count)
 
 	let prefixContextNotes = (1..<(contextSize)).map { prefixLength in
@@ -162,21 +162,31 @@ func main() throws {
 
 	let songs = try textFileURLs(at: arguments.sourceDirectoryURL)
 		.map { url in
-			Song(
-				title: url.deletingPathExtension().lastPathComponent,
-				lyrics: try String(contentsOf: url, encoding: .utf8)
-					.split(separator: "\n")
-					.compactMap { line in
-						let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-						if let first = trimmedLine.first {
-							var nonEmptyTrimmedLine = NonEmpty<String>(first)
-							nonEmptyTrimmedLine.append(contentsOf: trimmedLine.dropFirst())
-							return nonEmptyTrimmedLine
-						} else {
-							return nil
-						}
+			let title = url.deletingPathExtension().lastPathComponent
+
+			let lines = try String(contentsOf: url, encoding: .utf8)
+				.split(separator: "\n")
+				.compactMap { line in
+					let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+					if let first = trimmedLine.first {
+						var nonEmptyTrimmedLine = NonEmpty<String>(first)
+						nonEmptyTrimmedLine.append(contentsOf: trimmedLine.dropFirst())
+						return nonEmptyTrimmedLine
+					} else {
+						return nil
 					}
-			)
+				}
+
+			if let firstLine = lines.first {
+				var nonEmptyLines = NonEmpty<[NonEmpty<String>]>(firstLine)
+				nonEmptyLines.append(contentsOf: lines.dropFirst())
+				return Song(
+					title: title,
+					lyrics: nonEmptyLines
+				)
+			} else {
+				fatalError("Song \"\(title)\" has no lines.")
+			}
 		}
 
 	for song in songs {
