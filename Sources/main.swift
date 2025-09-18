@@ -23,7 +23,7 @@ struct Note: Hashable {
 
 struct Song {
 	let title: String
-	let lyrics: NonEmpty<[NonEmpty<String>]>
+	let lyrics: NonEmpty<[NonEmptyString]>
 }
 
 private func textFileURLs(at directoryURL: URL) throws -> [URL] {
@@ -38,8 +38,8 @@ private func textFileURLs(at directoryURL: URL) throws -> [URL] {
 	}
 }
 
-private func joinedTextNodesWithLineBreaks<S: Sequence, T: StringProtocol>(from strings: S) -> Node
-where S.Element == NonEmpty<T> {
+private func joinedTextNodesWithLineBreaks<S: Sequence>(from strings: S) -> Node
+where S.Element == NonEmptyString {
 	return Node.fragment(
 		Array(
 			strings
@@ -110,7 +110,7 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 	)
 }
 
-func notes(for lyrics: NonEmpty<[NonEmpty<String>]>) -> [Note] {
+func notes(for lyrics: NonEmpty<[NonEmptyString]>) -> [Note] {
 	let contextSize = min(2, lyrics.count)
 
 	let prefixContextNotes = (1..<(contextSize)).map { prefixLength in
@@ -169,7 +169,7 @@ func main() throws {
 				.compactMap { line in
 					let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
 					if let first = trimmedLine.first {
-						var nonEmptyTrimmedLine = NonEmpty<String>(first)
+						var nonEmptyTrimmedLine = NonEmptyString(first)
 						nonEmptyTrimmedLine.append(contentsOf: trimmedLine.dropFirst())
 						return nonEmptyTrimmedLine
 					} else {
@@ -178,7 +178,7 @@ func main() throws {
 				}
 
 			if let firstLine = lines.first {
-				var nonEmptyLines = NonEmpty<[NonEmpty<String>]>(firstLine)
+				var nonEmptyLines = NonEmpty<[NonEmptyString]>(firstLine)
 				nonEmptyLines.append(contentsOf: lines.dropFirst())
 				return Song(
 					title: title,
