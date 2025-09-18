@@ -109,10 +109,7 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 	)
 }
 
-func writeNotesCSV(for song: Song, inDirectory directoryURL: URL) throws {
-	let title = song.title
-	let lyrics = song.lyrics
-
+func notes(for lyrics: [String]) -> [Note] {
 	let contextSize = min(2, lyrics.count)
 
 	let prefixContextNotes = (1..<(contextSize)).map { prefixLength in
@@ -132,7 +129,7 @@ func writeNotesCSV(for song: Song, inDirectory directoryURL: URL) throws {
 			)
 		}
 
-	let notes: [Note] = [
+	return [
 		Note(front: .text("--START--"), back: .text(String(lyrics.first!)))
 	] + prefixContextNotes + slidingWindowNotes + [
 		Note(
@@ -140,12 +137,18 @@ func writeNotesCSV(for song: Song, inDirectory directoryURL: URL) throws {
 			back: .text("--END--")
 		)
 	]
+}
 
+func writeNotesCSV(for song: Song, inDirectory directoryURL: URL) throws {
 	try writeCSVRepresentation(
-		of: notesWithDuplicateFrontsAnnotated(from: OrderedSet(notes))
+		of: notesWithDuplicateFrontsAnnotated(
+				from: OrderedSet(
+					notes(for: song.lyrics)
+				)
+			)
 			.map { note in
 				Note(
-					front: .fragment([.small(.text(title)), .br, note.front]),
+					front: .fragment([.small(.text(song.title)), .br, note.front]),
 					back: note.back
 				)
 			},
