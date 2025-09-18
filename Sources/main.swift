@@ -3,6 +3,7 @@ import ArgumentParser
 import Foundation
 import Html
 import OrderedCollections
+import NonEmpty
 
 struct AnkiLyricsNoteGenerator: ParsableArguments {
 	@Argument(
@@ -22,7 +23,7 @@ struct Note: Hashable {
 
 struct Song {
 	let title: String
-	let lyrics: [String]
+	let lyrics: [NonEmpty<String>]
 }
 
 private func textFileURLs(at directoryURL: URL) throws -> [URL] {
@@ -37,8 +38,8 @@ private func textFileURLs(at directoryURL: URL) throws -> [URL] {
 	}
 }
 
-private func joinedTextNodesWithLineBreaks<S: Sequence>(from strings: S) -> Node
-where S.Element: StringProtocol {
+private func joinedTextNodesWithLineBreaks<S: Sequence, T: StringProtocol>(from strings: S) -> Node
+where S.Element == NonEmpty<T> {
 	return Node.fragment(
 		Array(
 			strings
@@ -109,7 +110,7 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 	)
 }
 
-func notes(for lyrics: [String]) -> [Note] {
+func notes(for lyrics: [NonEmpty<String>]) -> [Note] {
 	let contextSize = min(2, lyrics.count)
 
 	let prefixContextNotes = (1..<(contextSize)).map { prefixLength in
@@ -165,7 +166,16 @@ func main() throws {
 				title: url.deletingPathExtension().lastPathComponent,
 				lyrics: try String(contentsOf: url, encoding: .utf8)
 					.split(separator: "\n")
-					.map { line in line.trimmingCharacters(in: .whitespacesAndNewlines) }
+					.compactMap { line in
+						let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+						if let first = trimmedLine.first {
+							var nonEmptyTrimmedLine = NonEmpty<String>(first)
+							nonEmptyTrimmedLine.append(contentsOf: trimmedLine.dropFirst())
+							return nonEmptyTrimmedLine
+						} else {
+							return nil
+						}
+					}
 			)
 		}
 
