@@ -111,18 +111,10 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 }
 
 func notes(for lyrics: NonEmpty<[NonEmptyString]>) -> [Note] {
-	let contextSize = min(2, lyrics.count)
-
-	let prefixContextNotes = (1..<(contextSize)).map { prefixLength in
-		let nextLineIndex = lyrics.index(lyrics.startIndex, offsetBy: prefixLength)
-		return Note(
-			front: joinedTextNodesWithLineBreaks(from: lyrics[lyrics.startIndex..<nextLineIndex]),
-			back: .text(String(lyrics[nextLineIndex]))
-		)
-	}
+	guard lyrics.count > 1 else { fatalError() }
 
 	let slidingWindowNotes = lyrics
-		.windows(ofCount: contextSize + 1)
+		.windows(ofCount: 3)
 		.map { window in
 			Note(
 				front: joinedTextNodesWithLineBreaks(from: window.dropLast()),
@@ -131,10 +123,14 @@ func notes(for lyrics: NonEmpty<[NonEmptyString]>) -> [Note] {
 		}
 
 	return [
-		Note(front: .text("--START--"), back: .text(String(lyrics.first!)))
-	] + prefixContextNotes + slidingWindowNotes + [
+		Note(front: .text("--START--"), back: .text(String(lyrics.first))),
 		Note(
-			front: joinedTextNodesWithLineBreaks(from: lyrics.dropFirst(lyrics.count - contextSize)),
+			front: .text(lyrics.first.rawValue),
+			back: .text(String(lyrics[lyrics.index(after: lyrics.startIndex)]))
+		)
+	] + slidingWindowNotes + [
+		Note(
+			front: joinedTextNodesWithLineBreaks(from: lyrics.suffix(2)),
 			back: .text("--END--")
 		)
 	]
