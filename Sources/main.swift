@@ -4,7 +4,6 @@ import Foundation
 import Html
 import OrderedCollections
 import TabularData
-import UniformTypeIdentifiers
 
 struct AnkiLyricsNoteGenerator: ParsableArguments {
 	@Argument(
