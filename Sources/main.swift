@@ -23,7 +23,21 @@ struct Note: Hashable {
 
 struct Song {
 	let title: String
-	let lyrics: NonEmpty<[NonEmptyString]>
+	let lyrics: Pluralet<NonEmptyString>
+}
+
+struct Pluralet<Element> {
+	let first: Element
+	let second: Element
+	let rest: [Element]
+	var all: NonEmpty<[Element]> { [first, second] + rest }
+
+	init?<C>(_ collection: C) where C: Collection, Element == C.Element {
+		guard let first = collection.first, let second = collection.dropFirst().first else { return nil }
+		self.first = first
+		self.second = second
+		self.rest = Array(collection.dropFirst(2))
+	}
 }
 
 private func textFileURLs(at directoryURL: URL) throws -> [URL] {
@@ -110,10 +124,9 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 	)
 }
 
-func notes(for lyrics: NonEmpty<[NonEmptyString]>) -> [Note] {
-	guard lyrics.count > 1 else { fatalError() }
 
-	let slidingWindowNotes = lyrics
+func notes(for lyrics: Pluralet<NonEmptyString>) -> NonEmpty<[Note]> {
+	let slidingWindowNotes = lyrics.all
 		.windows(ofCount: 3)
 		.map { window in
 			Note(
@@ -126,11 +139,11 @@ func notes(for lyrics: NonEmpty<[NonEmptyString]>) -> [Note] {
 		Note(front: .text("--START--"), back: .text(String(lyrics.first))),
 		Note(
 			front: .text(lyrics.first.rawValue),
-			back: .text(String(lyrics[lyrics.index(after: lyrics.startIndex)]))
+			back: .text(lyrics.second.rawValue)
 		)
 	] + slidingWindowNotes + [
 		Note(
-			front: joinedTextNodesWithLineBreaks(from: lyrics.suffix(2)),
+			front: joinedTextNodesWithLineBreaks(from: lyrics.all.suffix(2)),
 			back: .text("--END--")
 		)
 	]
@@ -173,15 +186,13 @@ func main() throws {
 					}
 				}
 
-			if let firstLine = lines.first {
-				var nonEmptyLines = NonEmpty<[NonEmptyString]>(firstLine)
-				nonEmptyLines.append(contentsOf: lines.dropFirst())
+			if let linePluralet = Pluralet(lines) {
 				return Song(
 					title: title,
-					lyrics: nonEmptyLines
+					lyrics: linePluralet
 				)
 			} else {
-				fatalError("Song \"\(title)\" has no lines.")
+				fatalError("Song \"\(title)\" has less than two lines.")
 			}
 		}
 
