@@ -3,7 +3,6 @@ import ArgumentParser
 import Foundation
 import Html
 import OrderedCollections
-import TabularData
 
 struct AnkiLyricsNoteGenerator: ParsableArguments {
 	@Argument(
@@ -79,16 +78,34 @@ private func notesWithDuplicateFrontsAnnotated(from notes: some Collection<Note>
 	return annotatedNotes
 }
 
-private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: URL) throws {
-	var notesDataFrame = DataFrame()
-	notesDataFrame.append(column: Column(name: "front", contents: notes.map { render($0.front) }))
-	notesDataFrame.append(column: Column(name: "back", contents: notes.map { render($0.back) }))
+private func quoteCSVFieldIfNeeded(_ value: String) -> String {
+	guard !value.isEmpty else { return value }
 
-	try notesDataFrame.writeCSV(
+	let quotingIsNeeded =  value.contains(",")
+	|| value.contains("\"")
+	|| value.first?.isWhitespace == true
+	|| value.last?.isWhitespace == true
+	|| value.contains { character in character.isNewline }
+
+	return if quotingIsNeeded {
+		"\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+	} else {
+		value
+	}
+}
+
+private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: URL) throws {
+	let fileContent = notes
+		.map { note in
+			"\(quoteCSVFieldIfNeeded(render(note.front))),\(quoteCSVFieldIfNeeded(render(note.back)))"
+		}
+		.joined(separator: "\n")
+	try fileContent.write(
 		to: directoryURL
 			.appending(component: "_notes")
 			.appendingPathExtension("csv"),
-		options: .init(includesHeader: false)
+		atomically: true,
+		encoding: .utf8
 	)
 }
 
