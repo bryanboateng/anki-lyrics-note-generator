@@ -3,7 +3,6 @@ import ArgumentParser
 import Foundation
 import Html
 import OrderedCollections
-import NonEmpty
 
 struct AnkiLyricsNoteGenerator: ParsableArguments {
 	@Argument(
@@ -23,14 +22,14 @@ struct Note: Hashable {
 
 struct Song {
 	let title: String
-	let lyrics: Pluralet<NonEmptyString>
+	let lyrics: Pluralet<String>
 }
 
 struct Pluralet<Element> {
 	let first: Element
 	let second: Element
 	let rest: [Element]
-	var all: NonEmpty<[Element]> { [first, second] + rest }
+	var all: [Element] { [first, second] + rest }
 
 	init?<C>(_ collection: C) where C: Collection, Element == C.Element {
 		guard let first = collection.first, let second = collection.dropFirst().first else { return nil }
@@ -53,12 +52,12 @@ private func textFileURLs(at directoryURL: URL) throws -> [URL] {
 }
 
 private func joinedTextNodesWithLineBreaks<S: Sequence>(from strings: S) -> Node
-where S.Element == NonEmptyString {
+where S.Element == String {
 	return Node.fragment(
 		Array(
 			strings
 				.map { string in
-					Node.text(String(string))
+					Node.text(string)
 				}
 				.interspersed(with: .br)
 		)
@@ -125,21 +124,21 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 }
 
 
-func notes(for lyrics: Pluralet<NonEmptyString>) -> NonEmpty<[Note]> {
+func notes(for lyrics: Pluralet<String>) -> [Note] {
 	let slidingWindowNotes = lyrics.all
 		.windows(ofCount: 3)
 		.map { window in
 			Note(
 				front: joinedTextNodesWithLineBreaks(from: window.dropLast()),
-				back: .text(String(window.last!))
+				back: .text(window.last!)
 			)
 		}
 
 	return [
 		Note(front: .text("--START--"), back: .text(String(lyrics.first))),
 		Note(
-			front: .text(lyrics.first.rawValue),
-			back: .text(lyrics.second.rawValue)
+			front: .text(lyrics.first),
+			back: .text(lyrics.second)
 		)
 	] + slidingWindowNotes + [
 		Note(
@@ -175,16 +174,7 @@ func main() throws {
 
 			let lines = try String(contentsOf: url, encoding: .utf8)
 				.split(separator: "\n")
-				.compactMap { line in
-					let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-					if let first = trimmedLine.first {
-						var nonEmptyTrimmedLine = NonEmptyString(first)
-						nonEmptyTrimmedLine.append(contentsOf: trimmedLine.dropFirst())
-						return nonEmptyTrimmedLine
-					} else {
-						return nil
-					}
-				}
+				.map(String.init)
 
 			if let linePluralet = Pluralet(lines) {
 				return Song(

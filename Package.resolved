@@ -1,5 +1,5 @@
 {
-  "originHash" : "69f40601c792c3acf4937d3aab3aa377d5c827f5d8ec7cbd180d3f5bf7fedc46",
+  "originHash" : "aca1d2c250250830014bedf99c5471e1a269cfd864f19b9834e20edc7a6e4848",
   "pins" : [
     {
       "identity" : "swift-algorithms",
@@ -43,15 +43,6 @@
       "location" : "https://github.com/pointfreeco/swift-html",
       "state" : {
         "revision" : "662619ff6c39c389694b9f5d522c72291d034928",
-        "version" : "0.5.0"
-      }
-    },
-    {
-      "identity" : "swift-nonempty",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-nonempty.git",
-      "state" : {
-        "revision" : "1fd3f067ebc3900d200aa7e977fdb614cc5533bc",
         "version" : "0.5.0"
       }
     },

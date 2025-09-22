@@ -22,10 +22,6 @@ let package = Package(
 			url: "https://github.com/pointfreeco/swift-html",
 			.upToNextMajor(from: "0.4.0")
 		),
-		.package(
-			url: "https://github.com/pointfreeco/swift-nonempty.git",
-			.upToNextMajor(from: "0.3.0")
-		),
 	],
 	targets: [
 		.executableTarget(
@@ -35,7 +31,6 @@ let package = Package(
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
 				.product(name: "Collections", package: "swift-collections"),
 				.product(name: "Html", package: "swift-html"),
-				.product(name: "NonEmpty", package: "swift-nonempty"),
 			]
 		),
 	]
