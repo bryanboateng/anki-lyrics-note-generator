@@ -56,9 +56,7 @@ where S.Element == String {
 	return Node.fragment(
 		Array(
 			strings
-				.map { string in
-					Node.text(string)
-				}
+				.map(Node.text)
 				.interspersed(with: .br)
 		)
 	)
