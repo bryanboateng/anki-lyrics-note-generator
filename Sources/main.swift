@@ -22,21 +22,7 @@ struct Note: Hashable {
 
 struct Song {
 	let title: String
-	let lyrics: Pluralet<String>
-}
-
-struct Pluralet<Element> {
-	let first: Element
-	let second: Element
-	let rest: [Element]
-	var all: [Element] { [first, second] + rest }
-
-	init?<C>(_ collection: C) where C: Collection, Element == C.Element {
-		guard let first = collection.first, let second = collection.dropFirst().first else { return nil }
-		self.first = first
-		self.second = second
-		self.rest = Array(collection.dropFirst(2))
-	}
+	let lyrics: [String]
 }
 
 private func textFileURLs(at directoryURL: URL) throws -> [URL] {
@@ -122,8 +108,8 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 }
 
 
-func notes(for lyrics: Pluralet<String>) -> [Note] {
-	let slidingWindowNotes = lyrics.all
+func notes(for lyrics: [String]) -> [Note] {
+	let slidingWindowNotes = lyrics
 		.windows(ofCount: 3)
 		.map { window in
 			Note(
@@ -133,14 +119,14 @@ func notes(for lyrics: Pluralet<String>) -> [Note] {
 		}
 
 	return [
-		Note(front: .text("--START--"), back: .text(lyrics.first)),
+		Note(front: .text("--START--"), back: .text(lyrics[0])),
 		Note(
-			front: .text(lyrics.first),
-			back: .text(lyrics.second)
+			front: .text(lyrics[0]),
+			back: .text(lyrics[1])
 		)
 	] + slidingWindowNotes + [
 		Note(
-			front: joinedTextNodesWithLineBreaks(from: lyrics.all.suffix(2)),
+			front: joinedTextNodesWithLineBreaks(from: lyrics.suffix(2)),
 			back: .text("--END--")
 		)
 	]
@@ -174,14 +160,11 @@ func main() throws {
 				.split(separator: "\n")
 				.map(String.init)
 
-			if let linePluralet = Pluralet(lines) {
-				return Song(
-					title: title,
-					lyrics: linePluralet
-				)
-			} else {
+			guard lines.count >= 2 else {
 				fatalError("Song \"\(title)\" has less than two lines.")
 			}
+
+			return Song(title: title, lyrics: lines)
 		}
 
 	for song in songs {
