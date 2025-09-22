@@ -133,7 +133,7 @@ func notes(for lyrics: Pluralet<String>) -> [Note] {
 		}
 
 	return [
-		Note(front: .text("--START--"), back: .text(String(lyrics.first))),
+		Note(front: .text("--START--"), back: .text(lyrics.first)),
 		Note(
 			front: .text(lyrics.first),
 			back: .text(lyrics.second)
