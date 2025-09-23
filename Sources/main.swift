@@ -19,34 +19,14 @@ private struct Song {
 	let lyrics: [String]
 }
 
+struct PromptAndAnswer: Hashable {
+	let prompt: [String]
+	let answer: String
+}
+
 private struct Note: Hashable {
 	let front: Node
 	let back: Node
-
-	init(draft: Draft) {
-		self.front = .fragment(
-			Array(
-				(
-					[.small(.text(draft.title))]
-					+
-					draft.promptAndAnswer.prompt
-						.map(Node.text)
-				)
-				.interspersed(with: .br)
-			)
-		)
-		self.back = .text(draft.promptAndAnswer.answer)
-	}
-
-	struct Draft {
-		let title: String
-		let promptAndAnswer: PromptAndAnswer
-
-		struct PromptAndAnswer: Hashable {
-			let prompt: [String]
-			let answer: String
-		}
-	}
 }
 
 private extension BidirectionalCollection {
@@ -113,14 +93,14 @@ private func shortestUniqueWindowSize(
 	return nil
 }
 
-private func noteDrafts(for song: Song) -> [Note.Draft] {
-	var promptAndAnswers: [Note.Draft.PromptAndAnswer] = []
+private func notes(for song: Song) -> [Note] {
+	var promptAndAnswers: [PromptAndAnswer] = []
 
 	let lines = song.lyrics + ["--END--"]
 	for lineIndex in 0..<lines.count {
 		if lineIndex == 0 {
 			promptAndAnswers.append(
-				Note.Draft.PromptAndAnswer(
+				PromptAndAnswer(
 					prompt: ["--START--"],
 					answer: lines[lineIndex]
 				)
@@ -128,7 +108,7 @@ private func noteDrafts(for song: Song) -> [Note.Draft] {
 		} else {
 			let windowSize = shortestUniqueWindowSize(in: lines, endingAt: lineIndex) ?? lineIndex
 			promptAndAnswers.append(
-				Note.Draft.PromptAndAnswer(
+				PromptAndAnswer(
 					prompt: Array(lines.window(ofCount: windowSize, endingAt: lineIndex)!),
 					answer: lines[lineIndex]
 				)
@@ -139,9 +119,19 @@ private func noteDrafts(for song: Song) -> [Note.Draft] {
 	return promptAndAnswers
 		.uniqued()
 		.map { promptAndAnswer in
-			Note.Draft(
-				title: song.title,
-				promptAndAnswer: promptAndAnswer
+			Note(
+				front: .fragment(
+					Array(
+						(
+							[.small(.text(song.title))]
+							+
+							promptAndAnswer.prompt
+								.map(Node.text)
+						)
+						.interspersed(with: .br)
+					)
+				),
+				back: .text(promptAndAnswer.answer)
 			)
 		}
 }
@@ -162,45 +152,49 @@ private func quoteCSVFieldIfNeeded(_ value: String) -> String {
 	}
 }
 
-private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: URL) throws {
+private func writeCSVRepresentation(of notes: [Note], to url: URL) throws {
 	let fileContent = notes
 		.map { note in
 			"\(quoteCSVFieldIfNeeded(render(note.front))),\(quoteCSVFieldIfNeeded(render(note.back)))"
 		}
 		.joined(separator: "\n")
 	try fileContent.write(
-		to: directoryURL
-			.appending(component: "_notes")
-			.appendingPathExtension("csv"),
+		to: url,
 		atomically: true,
 		encoding: .utf8
+	)
+}
+
+private func writeNotesCSV(for song: Song, inDirectory directoryURL: URL) throws {
+	try writeCSVRepresentation(
+		of: notes(for: song),
+		to: directoryURL
+			.appending(component: song.title)
+			.appendingPathExtension("csv")
 	)
 }
 
 private func main() throws {
 	let arguments = AnkiLyricsNoteGenerator.parseOrExit()
 
-	let notes = try textFileURLs(at: arguments.sourceDirectoryURL)
-		.map { url in
-			let title = url.deletingPathExtension().lastPathComponent
+	for url in try textFileURLs(at: arguments.sourceDirectoryURL) {
+		let title = url.deletingPathExtension().lastPathComponent
 
-			let lines = try String(contentsOf: url, encoding: .utf8)
-				.split(separator: "\n")
-				.map(String.init)
+		let lines = try String(contentsOf: url, encoding: .utf8)
+			.split(separator: "\n")
+			.map(String.init)
 
-			guard !lines.isEmpty else {
-				fatalError("Song \"\(title)\" has no lines.")
-			}
-
-			return Song(title: title, lyrics: lines)
+		if lines.isEmpty {
+			print("Skipping song \"\(title)\" (no lyrics found).")
+			continue
 		}
-		.flatMap(noteDrafts)
-		.map(Note.init)
 
-	try writeCSVRepresentation(
-		of: notes,
-		inDirectory: arguments.sourceDirectoryURL
-	)
+		try writeNotesCSV(
+			for: Song(title: title, lyrics: lines),
+			inDirectory: arguments.sourceDirectoryURL
+		)
+
+	}
 }
 
 try main()
