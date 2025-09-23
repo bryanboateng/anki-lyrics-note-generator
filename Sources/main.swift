@@ -34,6 +34,13 @@ struct CoupletStep {
 		.init(from: self)
 	}
 
+	var nextKey: NextKey {
+		switch self.next {
+		case .line(let l): .line(l.text)
+		case .end: .end
+		}
+	}
+
 	enum Next {
 		case line(NumberedLine)
 		case end
@@ -52,6 +59,11 @@ struct CoupletStep {
 			self.init(step.firstLine, step.secondLine)
 		}
 	}
+
+	enum NextKey: Hashable {
+		case line(String)
+		case end
+	}
 }
 
 struct Note: Hashable {
@@ -59,11 +71,16 @@ struct Note: Hashable {
 	let back: Node
 
 	init(draft: Draft) {
+		let a: Optional<Node> = if let disambiguationIndex = draft.disambiguationIndex {
+			.small(.text(String(repeating: "★", count: disambiguationIndex)))
+		} else {
+			nil
+		}
 		self.front = .fragment(
 			Array(
 				[
 					.small(.text(draft.title)),
-					draft.isAmbiguous ? .small(.text("★")) : nil,
+					a,
 					draft.front
 				]
 					.compacted()
@@ -75,7 +92,7 @@ struct Note: Hashable {
 
 	struct Draft {
 		let title: String
-		let isAmbiguous: Bool
+		let disambiguationIndex: Int?
 		let front: Node
 		let back: Node
 	}
@@ -124,23 +141,29 @@ func noteDrafts(for song: Song) -> [Note.Draft] {
 	]
 
 	let grouped = Dictionary(grouping: coupletSteps) { step in step.frontKey }
-	let coupletStepNoteDrafts = coupletSteps.map { currentStep in
-		let siblings = grouped[currentStep.frontKey] ?? []
 
-		let isAmbiguous = siblings.contains { otherStep in
-			switch (currentStep.next, otherStep.next) {
-			case (.line(let a), .line(let b)):
-				return a.text != b.text
-			case (.line, .end), (.end, .line):
-				return true
-			case (.end, .end):
-				return false
+	var disambiguationIndexByFront: [CoupletStep.FrontKey: [CoupletStep.NextKey: Int]] = [:]
+	for (front, steps) in grouped {
+		var disambiguationIndexForNextKey: [CoupletStep.NextKey: Int] = [:]
+		var nextDisambiguationIndex = 1
+
+		for step in steps {
+			let nextKey = step.nextKey
+			if disambiguationIndexForNextKey[nextKey] == nil {
+				disambiguationIndexForNextKey[nextKey] = nextDisambiguationIndex
+				nextDisambiguationIndex += 1
 			}
 		}
 
+		if disambiguationIndexForNextKey.count >= 2 {
+			disambiguationIndexByFront[front] = disambiguationIndexForNextKey
+		}
+	}
+
+	let coupletStepNoteDrafts: [Note.Draft] = coupletSteps.map { currentStep in
 		return Note.Draft(
 			title: song.title,
-			isAmbiguous: isAmbiguous,
+			disambiguationIndex: disambiguationIndexByFront[currentStep.frontKey]?[currentStep.nextKey],
 			front: .fragment([
 				node(for: currentStep.firstLine),
 				.br,
@@ -159,13 +182,13 @@ func noteDrafts(for song: Song) -> [Note.Draft] {
 	return [
 		Note.Draft (
 			title: song.title,
-			isAmbiguous: false,
+			disambiguationIndex: nil,
 			front: .text("--START--"),
 			back: node(for: numberedLines[0])
 		),
 		Note.Draft (
 			title: song.title,
-			isAmbiguous: false,
+			disambiguationIndex: nil,
 			front: node(for: numberedLines[0]),
 			back: node(for: numberedLines[1])
 		)
