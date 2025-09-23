@@ -114,35 +114,36 @@ func shortestUniqueWindowSize(
 }
 
 func noteDrafts(for song: Song) -> [Note.Draft] {
-	var noteDrafts: [Note.Draft] = []
+	var promptAndAnswers: [Note.Draft.PromptAndAnswer] = []
 
 	let lines = song.lyrics + ["--END--"]
 	for lineIndex in 0..<lines.count {
 		if lineIndex == 0 {
-			noteDrafts.append(
-				Note.Draft(
-					title: song.title,
-					promptAndAnswer: Note.Draft.PromptAndAnswer(
-						prompt: ["--START--"],
-						answer: lines[lineIndex]
-					)
+			promptAndAnswers.append(
+				Note.Draft.PromptAndAnswer(
+					prompt: ["--START--"],
+					answer: lines[lineIndex]
 				)
 			)
 		} else {
 			let windowSize = shortestUniqueWindowSize(in: lines, endingAt: lineIndex) ?? lineIndex
-			noteDrafts.append(
-				Note.Draft(
-					title: song.title,
-					promptAndAnswer: Note.Draft.PromptAndAnswer(
-						prompt: Array(lines.window(ofCount: windowSize, endingAt: lineIndex)!),
-						answer: lines[lineIndex]
-					)
+			promptAndAnswers.append(
+				Note.Draft.PromptAndAnswer(
+					prompt: Array(lines.window(ofCount: windowSize, endingAt: lineIndex)!),
+					answer: lines[lineIndex]
 				)
 			)
 		}
 	}
 
-	return noteDrafts.uniqued(on: \.promptAndAnswer)
+	return promptAndAnswers
+		.uniqued()
+		.map { promptAndAnswer in
+			Note.Draft(
+				title: song.title,
+				promptAndAnswer: promptAndAnswer
+			)
+		}
 }
 
 private func quoteCSVFieldIfNeeded(_ value: String) -> String {
