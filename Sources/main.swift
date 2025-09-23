@@ -15,14 +15,70 @@ struct AnkiLyricsNoteGenerator: ParsableArguments {
 	var sourceDirectoryURL: URL
 }
 
-struct Note: Hashable {
-	let front: Node
-	let back: Node
-}
-
 struct Song {
 	let title: String
 	let lyrics: [String]
+}
+
+struct NumberedLine {
+	let i: Int
+	let text: String
+}
+
+struct CoupletStep {
+	let firstLine: NumberedLine
+	let secondLine: NumberedLine
+	let next: Next
+
+	var frontKey: FrontKey {
+		.init(from: self)
+	}
+
+	enum Next {
+		case line(NumberedLine)
+		case end
+	}
+
+	struct FrontKey: Hashable {
+		let firstText: String
+		let secondText: String
+
+		init(_ first: NumberedLine, _ second: NumberedLine) {
+			self.firstText = first.text
+			self.secondText = second.text
+		}
+
+		init(from step: CoupletStep) {
+			self.init(step.firstLine, step.secondLine)
+		}
+	}
+}
+
+struct Note: Hashable {
+	let front: Node
+	let back: Node
+
+	init(draft: Draft) {
+		self.front = .fragment(
+			Array(
+				[
+					.small(.text(draft.title)),
+					draft.isAmbiguous ? .small(.text("★")) : nil,
+					draft.front
+				]
+					.compacted()
+					.interspersed(with: .br)
+			)
+		)
+		self.back = draft.back
+	}
+
+	struct Draft {
+		let title: String
+		let isAmbiguous: Bool
+		let front: Node
+		let back: Node
+	}
 }
 
 private func textFileURLs(at directoryURL: URL) throws -> [URL] {
@@ -37,43 +93,84 @@ private func textFileURLs(at directoryURL: URL) throws -> [URL] {
 	}
 }
 
-private func joinedTextNodesWithLineBreaks<S: Sequence>(from strings: S) -> Node
-where S.Element == String {
-	return Node.fragment(
-		Array(
-			strings
-				.map(Node.text)
-				.interspersed(with: .br)
-		)
-	)
+func node(for numberedLine: NumberedLine) -> Node {
+	.fragment([
+		.small(.small(.text((numberedLine.i + 1).formatted()))),
+		.br,
+		.text(numberedLine.text)
+	])
 }
 
-private func notesWithDuplicateFrontsAnnotated(from notes: some Collection<Note>) -> [Note] {
-	var remainingOccurrenceCountByFront = Dictionary(grouping: notes) { note in
-		note.front
-	}
-		.mapValues(\.count)
-		.filter { (_, occurrenceCount) in
-			occurrenceCount > 1
-		}
+func noteDrafts(for song: Song) -> [Note.Draft] {
+	let numberedLines = song.lyrics
+		.enumerated()
+		.map(NumberedLine.init)
 
-	var annotatedNotes: [Note] = []
-	for note in notes.reversed() {
-		if let remainingOccurrenceCount = remainingOccurrenceCountByFront[note.front] {
-			annotatedNotes.insert(
-				Note(
-					front: Node.fragment([.small(.small(.text(String(remainingOccurrenceCount)))), .br, note.front]),
-					back: note.back
-				),
-				at: 0
+	let coupletSteps = numberedLines
+		.windows(ofCount: 3)
+		.map { window in
+			CoupletStep(
+				firstLine: window.first!,
+				secondLine: window[window.index(after: window.startIndex)],
+				next: .line(window.last!)
 			)
-			remainingOccurrenceCountByFront[note.front] = remainingOccurrenceCount - 1
-		} else {
-			annotatedNotes.insert(note, at: 0)
 		}
+	+ [
+		CoupletStep(
+			firstLine: numberedLines[numberedLines.index(numberedLines.endIndex, offsetBy: -2)],
+			secondLine: numberedLines.last!,
+			next: .end
+		)
+	]
+
+	let grouped = Dictionary(grouping: coupletSteps) { step in step.frontKey }
+	let coupletStepNoteDrafts = coupletSteps.map { currentStep in
+		let siblings = grouped[currentStep.frontKey] ?? []
+
+		let isAmbiguous = siblings.contains { otherStep in
+			switch (currentStep.next, otherStep.next) {
+			case (.line(let a), .line(let b)):
+				return a.text != b.text
+			case (.line, .end), (.end, .line):
+				return true
+			case (.end, .end):
+				return false
+			}
+		}
+
+		return Note.Draft(
+			title: song.title,
+			isAmbiguous: isAmbiguous,
+			front: .fragment([
+				node(for: currentStep.firstLine),
+				.br,
+				node(for: currentStep.secondLine)
+			]),
+			back: {
+				switch currentStep.next {
+				case .line(let line): node(for: line)
+				case .end: .text("--END--")
+				}
+			}()
+		)
 	}
 
-	return annotatedNotes
+
+	return [
+		Note.Draft (
+			title: song.title,
+			isAmbiguous: false,
+			front: .text("--START--"),
+			back: node(for: numberedLines[0])
+		),
+		Note.Draft (
+			title: song.title,
+			isAmbiguous: false,
+			front: node(for: numberedLines[0]),
+			back: node(for: numberedLines[1])
+		)
+	] + coupletStepNoteDrafts
+
 }
 
 private func quoteCSVFieldIfNeeded(_ value: String) -> String {
@@ -107,44 +204,10 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 	)
 }
 
-
-func notes(for lyrics: [String]) -> [Note] {
-	let slidingWindowNotes = lyrics
-		.windows(ofCount: 3)
-		.map { window in
-			Note(
-				front: joinedTextNodesWithLineBreaks(from: window.dropLast()),
-				back: .text(window.last!)
-			)
-		}
-
-	return [
-		Note(front: .text("--START--"), back: .text(lyrics[0])),
-		Note(
-			front: .text(lyrics[0]),
-			back: .text(lyrics[1])
-		)
-	] + slidingWindowNotes + [
-		Note(
-			front: joinedTextNodesWithLineBreaks(from: lyrics.suffix(2)),
-			back: .text("--END--")
-		)
-	]
-}
-
 func writeNotesCSV(for song: Song, inDirectory directoryURL: URL) throws {
 	try writeCSVRepresentation(
-		of: notesWithDuplicateFrontsAnnotated(
-				from: OrderedSet(
-					notes(for: song.lyrics)
-				)
-			)
-			.map { note in
-				Note(
-					front: .fragment([.small(.text(song.title)), .br, note.front]),
-					back: note.back
-				)
-			},
+		of: noteDrafts(for: song)
+			.map(Note.init),
 		inDirectory: directoryURL
 	)
 }
