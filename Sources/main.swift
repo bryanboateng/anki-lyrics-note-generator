@@ -2,7 +2,6 @@ import Algorithms
 import ArgumentParser
 import Foundation
 import Html
-import OrderedCollections
 
 struct AnkiLyricsNoteGenerator: ParsableArguments {
 	@Argument(
