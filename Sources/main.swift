@@ -20,81 +20,45 @@ struct Song {
 	let lyrics: [String]
 }
 
-struct NumberedLine {
-	let i: Int
-	let text: String
-}
-
-struct CoupletStep {
-	let firstLine: NumberedLine
-	let secondLine: NumberedLine
-	let next: Next
-
-	var frontKey: FrontKey {
-		.init(from: self)
-	}
-
-	var nextKey: NextKey {
-		switch self.next {
-		case .line(let l): .line(l.text)
-		case .end: .end
-		}
-	}
-
-	enum Next {
-		case line(NumberedLine)
-		case end
-	}
-
-	struct FrontKey: Hashable {
-		let firstText: String
-		let secondText: String
-
-		init(_ first: NumberedLine, _ second: NumberedLine) {
-			self.firstText = first.text
-			self.secondText = second.text
-		}
-
-		init(from step: CoupletStep) {
-			self.init(step.firstLine, step.secondLine)
-		}
-	}
-
-	enum NextKey: Hashable {
-		case line(String)
-		case end
-	}
-}
-
 struct Note: Hashable {
 	let front: Node
 	let back: Node
 
 	init(draft: Draft) {
-		let a: Optional<Node> = if let disambiguationIndex = draft.disambiguationIndex {
-			.small(.text(String(repeating: "★", count: disambiguationIndex)))
-		} else {
-			nil
-		}
 		self.front = .fragment(
 			Array(
-				[
-					.small(.text(draft.title)),
-					a,
-					draft.front
-				]
-					.compacted()
-					.interspersed(with: .br)
+				(
+					[.small(.text(draft.title))]
+					+
+					draft.promptAndAnswer.prompt
+						.map(Node.text)
+				)
+				.interspersed(with: .br)
 			)
 		)
-		self.back = draft.back
+		self.back = .text(draft.promptAndAnswer.answer)
 	}
 
 	struct Draft {
 		let title: String
-		let disambiguationIndex: Int?
-		let front: Node
-		let back: Node
+		let promptAndAnswer: PromptAndAnswer
+
+		struct PromptAndAnswer: Hashable {
+			let prompt: [String]
+			let answer: String
+		}
+	}
+}
+
+extension BidirectionalCollection {
+	/// The `count` elements immediately *before* `end`.
+	/// Returns `nil` if there aren't enough elements.
+	func window(ofCount count: Int, endingAt endIndex: Index) -> SubSequence? {
+		guard count > 0, endIndex != self.endIndex else { return nil }
+		guard let startIndex = self.index(endIndex, offsetBy: -count, limitedBy: startIndex),
+				distance(from: startIndex, to: endIndex) == count
+		else { return nil }
+		return self[startIndex..<endIndex]
 	}
 }
 
@@ -110,90 +74,76 @@ private func textFileURLs(at directoryURL: URL) throws -> [URL] {
 	}
 }
 
-func node(for numberedLine: NumberedLine) -> Node {
-	.fragment([
-		.small(.small(.text((numberedLine.i + 1).formatted()))),
-		.br,
-		.text(numberedLine.text)
-	])
+func windowUniquelyDeterminesElement<C: BidirectionalCollection>(
+	in collection: C,
+	endingAt index: C.Index,
+	windowSize: Int
+) -> Bool where C.Element: Equatable {
+	guard let window = collection.window(ofCount: windowSize, endingAt: index) else {
+		return false
+	}
+
+	var otherIndex = collection.index(
+		collection.startIndex,
+		offsetBy: windowSize,
+		limitedBy: collection.endIndex
+	) ?? collection.endIndex
+	while otherIndex != collection.endIndex {
+		if otherIndex != index,
+			let otherWindow = collection.window(ofCount: windowSize, endingAt: otherIndex),
+			otherWindow.elementsEqual(window),
+			collection[otherIndex] != collection[index] {
+			return false
+		}
+		otherIndex = collection.index(after: otherIndex)
+	}
+	return true
+}
+
+func shortestUniqueWindowSize(
+	in items: [String],
+	endingAt endIndex: Int
+) -> Int? {
+	guard items.indices.contains(endIndex), endIndex > 0 else { return nil }
+
+	for windowSize in 1...endIndex {
+		if windowUniquelyDeterminesElement(in: items, endingAt: endIndex, windowSize: windowSize) {
+			return windowSize
+		}
+	}
+	return nil
 }
 
 func noteDrafts(for song: Song) -> [Note.Draft] {
-	let numberedLines = song.lyrics
-		.enumerated()
-		.map(NumberedLine.init)
+	var noteDrafts: [Note.Draft] = []
 
-	let coupletSteps = numberedLines
-		.windows(ofCount: 3)
-		.map { window in
-			CoupletStep(
-				firstLine: window.first!,
-				secondLine: window[window.index(after: window.startIndex)],
-				next: .line(window.last!)
+	let lines = song.lyrics + ["--END--"]
+	for lineIndex in 0..<lines.count {
+		if lineIndex == 0 {
+			noteDrafts.append(
+				Note.Draft(
+					title: song.title,
+					promptAndAnswer: Note.Draft.PromptAndAnswer(
+						prompt: ["--START--"],
+						answer: lines[lineIndex]
+					)
+				)
+			)
+		} else {
+			let windowSize = shortestUniqueWindowSize(in: lines, endingAt: lineIndex) ?? lineIndex
+			noteDrafts.append(
+				Note.Draft(
+					title: song.title,
+					promptAndAnswer: Note.Draft.PromptAndAnswer(
+						prompt: Array(lines.window(ofCount: windowSize, endingAt: lineIndex)!),
+						answer: lines[lineIndex]
+					)
+				)
 			)
 		}
-	+ [
-		CoupletStep(
-			firstLine: numberedLines[numberedLines.index(numberedLines.endIndex, offsetBy: -2)],
-			secondLine: numberedLines.last!,
-			next: .end
-		)
-	]
-
-	let grouped = Dictionary(grouping: coupletSteps) { step in step.frontKey }
-
-	var disambiguationIndexByFront: [CoupletStep.FrontKey: [CoupletStep.NextKey: Int]] = [:]
-	for (front, steps) in grouped {
-		var disambiguationIndexForNextKey: [CoupletStep.NextKey: Int] = [:]
-		var nextDisambiguationIndex = 1
-
-		for step in steps {
-			let nextKey = step.nextKey
-			if disambiguationIndexForNextKey[nextKey] == nil {
-				disambiguationIndexForNextKey[nextKey] = nextDisambiguationIndex
-				nextDisambiguationIndex += 1
-			}
-		}
-
-		if disambiguationIndexForNextKey.count >= 2 {
-			disambiguationIndexByFront[front] = disambiguationIndexForNextKey
-		}
 	}
 
-	let coupletStepNoteDrafts: [Note.Draft] = coupletSteps.map { currentStep in
-		return Note.Draft(
-			title: song.title,
-			disambiguationIndex: disambiguationIndexByFront[currentStep.frontKey]?[currentStep.nextKey],
-			front: .fragment([
-				node(for: currentStep.firstLine),
-				.br,
-				node(for: currentStep.secondLine)
-			]),
-			back: {
-				switch currentStep.next {
-				case .line(let line): node(for: line)
-				case .end: .text("--END--")
-				}
-			}()
-		)
-	}
-
-
-	return [
-		Note.Draft (
-			title: song.title,
-			disambiguationIndex: nil,
-			front: .text("--START--"),
-			back: node(for: numberedLines[0])
-		),
-		Note.Draft (
-			title: song.title,
-			disambiguationIndex: nil,
-			front: node(for: numberedLines[0]),
-			back: node(for: numberedLines[1])
-		)
-	] + coupletStepNoteDrafts
-
+	return noteDrafts.uniqued(on: \.promptAndAnswer)
 }
 
 private func quoteCSVFieldIfNeeded(_ value: String) -> String {
@@ -238,8 +188,8 @@ func main() throws {
 				.split(separator: "\n")
 				.map(String.init)
 
-			guard lines.count >= 2 else {
-				fatalError("Song \"\(title)\" has less than two lines.")
+			guard !lines.isEmpty else {
+				fatalError("Song \"\(title)\" has no lines.")
 			}
 
 			return Song(title: title, lyrics: lines)
