@@ -3,7 +3,7 @@ import ArgumentParser
 import Foundation
 import Html
 
-struct AnkiLyricsNoteGenerator: ParsableArguments {
+private struct AnkiLyricsNoteGenerator: ParsableArguments {
 	@Argument(
 		help: ArgumentHelp(
 			"Directory containing plain-text lyrics (one file per song)",
@@ -14,12 +14,12 @@ struct AnkiLyricsNoteGenerator: ParsableArguments {
 	var sourceDirectoryURL: URL
 }
 
-struct Song {
+private struct Song {
 	let title: String
 	let lyrics: [String]
 }
 
-struct Note: Hashable {
+private struct Note: Hashable {
 	let front: Node
 	let back: Node
 
@@ -49,7 +49,7 @@ struct Note: Hashable {
 	}
 }
 
-extension BidirectionalCollection {
+private extension BidirectionalCollection {
 	/// The `count` elements immediately *before* `end`.
 	/// Returns `nil` if there aren't enough elements.
 	func window(ofCount count: Int, endingAt endIndex: Index) -> SubSequence? {
@@ -73,7 +73,7 @@ private func textFileURLs(at directoryURL: URL) throws -> [URL] {
 	}
 }
 
-func windowUniquelyDeterminesElement<C: BidirectionalCollection>(
+private func windowUniquelyDeterminesElement<C: BidirectionalCollection>(
 	in collection: C,
 	endingAt index: C.Index,
 	windowSize: Int
@@ -99,7 +99,7 @@ func windowUniquelyDeterminesElement<C: BidirectionalCollection>(
 	return true
 }
 
-func shortestUniqueWindowSize(
+private func shortestUniqueWindowSize(
 	in items: [String],
 	endingAt endIndex: Int
 ) -> Int? {
@@ -113,7 +113,7 @@ func shortestUniqueWindowSize(
 	return nil
 }
 
-func noteDrafts(for song: Song) -> [Note.Draft] {
+private func noteDrafts(for song: Song) -> [Note.Draft] {
 	var promptAndAnswers: [Note.Draft.PromptAndAnswer] = []
 
 	let lines = song.lyrics + ["--END--"]
@@ -177,7 +177,7 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 	)
 }
 
-func main() throws {
+private func main() throws {
 	let arguments = AnkiLyricsNoteGenerator.parseOrExit()
 
 	let notes = try textFileURLs(at: arguments.sourceDirectoryURL)
