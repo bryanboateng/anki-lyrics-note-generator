@@ -204,18 +204,10 @@ private func writeCSVRepresentation(of notes: [Note], inDirectory directoryURL: 
 	)
 }
 
-func writeNotesCSV(for song: Song, inDirectory directoryURL: URL) throws {
-	try writeCSVRepresentation(
-		of: noteDrafts(for: song)
-			.map(Note.init),
-		inDirectory: directoryURL
-	)
-}
-
 func main() throws {
 	let arguments = AnkiLyricsNoteGenerator.parseOrExit()
 
-	let songs = try textFileURLs(at: arguments.sourceDirectoryURL)
+	let notes = try textFileURLs(at: arguments.sourceDirectoryURL)
 		.map { url in
 			let title = url.deletingPathExtension().lastPathComponent
 
@@ -229,10 +221,13 @@ func main() throws {
 
 			return Song(title: title, lyrics: lines)
 		}
+		.flatMap(noteDrafts)
+		.map(Note.init)
 
-	for song in songs {
-		try writeNotesCSV(for: song, inDirectory: arguments.sourceDirectoryURL)
-	}
+	try writeCSVRepresentation(
+		of: notes,
+		inDirectory: arguments.sourceDirectoryURL
+	)
 }
 
 try main()
