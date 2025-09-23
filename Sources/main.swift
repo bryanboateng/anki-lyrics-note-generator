@@ -182,7 +182,12 @@ private func main() throws {
 
 		let lines = try String(contentsOf: url, encoding: .utf8)
 			.split(separator: "\n")
-			.map(String.init)
+			.map { line in
+				line.trimmingCharacters(in: .whitespacesAndNewlines)
+			}
+			.filter { line in
+				!line.isEmpty
+			}
 
 		if lines.isEmpty {
 			print("Skipping song \"\(title)\" (no lyrics found).")
