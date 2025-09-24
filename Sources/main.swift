@@ -94,29 +94,16 @@ private func shortestUniqueWindowSize(
 }
 
 private func notes(for song: Song) -> [Note] {
-	var promptAndAnswers: [PromptAndAnswer] = []
+	let lines = ["--START--"] + song.lyrics + ["--END--"]
 
-	let lines = song.lyrics + ["--END--"]
-	for lineIndex in 0..<lines.count {
-		if lineIndex == 0 {
-			promptAndAnswers.append(
-				PromptAndAnswer(
-					prompt: ["--START--"],
-					answer: lines[lineIndex]
-				)
-			)
-		} else {
+	return (1..<lines.count)
+		.map { lineIndex in
 			let windowSize = shortestUniqueWindowSize(in: lines, endingAt: lineIndex) ?? lineIndex
-			promptAndAnswers.append(
-				PromptAndAnswer(
-					prompt: Array(lines.window(ofCount: windowSize, endingAt: lineIndex)!),
-					answer: lines[lineIndex]
-				)
+			return PromptAndAnswer(
+				prompt: Array(lines.window(ofCount: windowSize, endingAt: lineIndex)!),
+				answer: lines[lineIndex]
 			)
 		}
-	}
-
-	return promptAndAnswers
 		.uniqued()
 		.map { promptAndAnswer in
 			Note(
