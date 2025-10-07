@@ -6,12 +6,12 @@ import Html
 private struct AnkiLyricsNoteGenerator: ParsableArguments {
 	@Argument(
 		help: ArgumentHelp(
-			"Directory containing plain-text lyrics (one file per song)",
-			valueName: "source-directory"
+			"Directory containing input/ with plain-text lyrics (one file per song); results written to output/ (created if missing)",
+			valueName: "working-directory"
 		),
 		completion: .directory, transform: URL.init(fileURLWithPath:)
 	)
-	var sourceDirectoryURL: URL
+	var workingDirectoryURL: URL
 }
 
 private struct Song {
@@ -38,6 +38,19 @@ private extension BidirectionalCollection {
 				distance(from: startIndex, to: endIndex) == count
 		else { return nil }
 		return self[startIndex..<endIndex]
+	}
+}
+
+private extension URL {
+	func appending<S>(
+		components: [S],
+		directoryHint: URL.DirectoryHint = .inferFromPath
+	) -> URL where S : StringProtocol {
+		var mutableSelf = self
+		for component in components {
+			mutableSelf.append(component: component, directoryHint: directoryHint)
+		}
+		return mutableSelf
 	}
 }
 
@@ -145,6 +158,11 @@ private func writeCSVRepresentation(of notes: [Note], to url: URL) throws {
 			"\(quoteCSVFieldIfNeeded(render(note.front))),\(quoteCSVFieldIfNeeded(render(note.back)))"
 		}
 		.joined(separator: "\n")
+
+	try FileManager.default.createDirectory(
+		at: url.deletingLastPathComponent(),
+		withIntermediateDirectories: true
+	)
 	try fileContent.write(
 		to: url,
 		atomically: true,
@@ -152,40 +170,69 @@ private func writeCSVRepresentation(of notes: [Note], to url: URL) throws {
 	)
 }
 
-private func writeNotesCSV(for song: Song, inDirectory directoryURL: URL) throws {
-	try writeCSVRepresentation(
-		of: notes(for: song),
-		to: directoryURL
-			.appending(component: song.title)
-			.appendingPathExtension("csv")
-	)
-}
-
 private func main() throws {
 	let arguments = AnkiLyricsNoteGenerator.parseOrExit()
 
-	for url in try textFileURLs(at: arguments.sourceDirectoryURL) {
-		let title = url.deletingPathExtension().lastPathComponent
+	let outputDirectoryURL = arguments.workingDirectoryURL
+		.appending(component: "output", directoryHint: .isDirectory)
+	if (
+		FileManager.default.fileExists(
+			atPath: outputDirectoryURL.absoluteURL.path()
+		)
+	) {
+		try FileManager.default.removeItem(at: outputDirectoryURL)
+	}
 
-		let lines = try String(contentsOf: url, encoding: .utf8)
-			.split(separator: "\n")
-			.map { line in
-				line.trimmingCharacters(in: .whitespacesAndNewlines)
-			}
-			.filter { line in
-				!line.isEmpty
-			}
+	var directoryPathComponentsQueue: [[String]] = [[]]
 
-		if lines.isEmpty {
-			print("Skipping song \"\(title)\" (no lyrics found).")
-			continue
-		}
+	while !directoryPathComponentsQueue.isEmpty {
+		let directoryPathComponents = directoryPathComponentsQueue.removeFirst()
 
-		try writeNotesCSV(
-			for: Song(title: title, lyrics: lines),
-			inDirectory: arguments.sourceDirectoryURL
+		let inputDirectoryEntries = try FileManager.default.contentsOfDirectory(
+			at: arguments.workingDirectoryURL
+				.appending(component: "input", directoryHint: .isDirectory)
+				.appending(components: directoryPathComponents),
+			includingPropertiesForKeys: [.isDirectoryKey],
+			options: [.skipsHiddenFiles, .skipsPackageDescendants]
 		)
 
+		for inputDirectoryEntry in inputDirectoryEntries {
+			if try inputDirectoryEntry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? true {
+				directoryPathComponentsQueue.append(directoryPathComponents + [inputDirectoryEntry.lastPathComponent])
+			} else if inputDirectoryEntry.pathExtension.lowercased() == "txt" {
+				let lines = try String(contentsOf: inputDirectoryEntry, encoding: .utf8)
+					.split(separator: "\n")
+					.map { line in
+						line.trimmingCharacters(in: .whitespacesAndNewlines)
+					}
+					.filter { line in
+						!line.isEmpty
+					}
+				guard let title = lines.first else {
+					print("Skipping file \"\(inputDirectoryEntry)\" (no title found).")
+					continue
+				}
+
+				let lyrics = lines.dropFirst()
+
+				if lyrics.isEmpty {
+					print("Skipping song \"\(title)\" (no lyrics found).")
+					continue
+				}
+
+				try writeCSVRepresentation(
+					of: notes(for: Song(title: title, lyrics: Array(lyrics))),
+					to: outputDirectoryURL
+						.appending(components: directoryPathComponents)
+						.appending(
+							component: inputDirectoryEntry
+								.deletingPathExtension()
+								.lastPathComponent
+						)
+						.appendingPathExtension("csv")
+				)
+			}
+		}
 	}
 }
 
